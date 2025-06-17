@@ -32,6 +32,8 @@ pipeline_stack = PipelineCdkStack(
     ecr_repository = ecr_stack.ecr_data,
     test_app_fargate = test_app_stack.ecs_service_data,
     prod_app_fargate = prod_app_stack.ecs_service_data,
+    green_target_group = prod_app_stack.green_target_group,
+    green_load_balancer_listener = prod_app_stack.green_load_balancer_listener,
 )
 
 app.synth()
