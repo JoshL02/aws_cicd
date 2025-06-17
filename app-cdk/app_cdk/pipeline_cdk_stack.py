@@ -10,6 +10,8 @@ from aws_cdk import (
     aws_iam as iam,
     aws_ssm as ssm,
     aws_codedeploy as codedeploy,
+    aws_cloudwatch as cloudwatch,
+    Duration as duration
 )
 
 class PipelineCdkStack(Stack):
@@ -204,6 +206,37 @@ class PipelineCdkStack(Stack):
                     task_definition_template_input = source_output,
                     run_order = 2
                 )
+            ]
+        )
+
+        build_rate = cloudwatch.GraphWidget(
+            title="Build Successes and Failures",
+            width=6,
+            height=6,
+            view=cloudwatch.GraphWidgetView.PIE,
+            left=[
+                cloudwatch.Metric(
+                    namespace="AWS/CodeBuild",
+                    metric_name="SucceededBuilds",
+                    statistic='sum',
+                    label='Succeeded Builds',
+                    period=duration.days(30)
+                ),
+                cloudwatch.Metric(
+                    namespace="AWS/CodeBuild",
+                    metric_name="FailedBuilds",
+                    statistic='sum',
+                    label='Failed Builds',
+                    period=duration.days(30)
+                )
+            ]
+        )
+
+        dashboard = cloudwatch.Dashboard(
+            self, 'CICD_Dashboard',
+            dashboard_name='CICD_Dashboard',
+            widgets=[
+                [build_rate]
             ]
         )
 
