@@ -7,6 +7,7 @@ from app_cdk.app_cdk_stack import AppCdkStack
 
 from app_cdk.pipeline_cdk_stack import PipelineCdkStack
 
+from app_cdk.ecr_cdk_stack import EcrCdkStack
 
 app = cdk.App()
 AppCdkStack(app, "AppCdkStack",
@@ -26,10 +27,16 @@ AppCdkStack(app, "AppCdkStack",
 
     # For more information, see https://docs.aws.amazon.com/cdk/latest/guide/environments.html
     )
+    
+ecr_stack = EcrCdkStack(
+    app,
+    'ecr-stack'
+)
 
 pipeline_stack = PipelineCdkStack(
     app,
     'pipeline-stack',
+    ecr_repository = ecr_stack.ecr_data,
 )
 
 app.synth()
