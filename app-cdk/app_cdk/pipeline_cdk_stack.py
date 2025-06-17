@@ -11,7 +11,11 @@ from aws_cdk import (
     aws_ssm as ssm,
     aws_codedeploy as codedeploy,
     aws_cloudwatch as cloudwatch,
-    Duration as duration
+    Duration as duration,
+    aws_sns as sns,
+    aws_sns_subscriptions as subscriptions,
+    aws_events as events,
+    aws_events_targets as targets
 )
 
 class PipelineCdkStack(Stack):
@@ -232,12 +236,111 @@ class PipelineCdkStack(Stack):
             ]
         )
 
+        builds_count = cloudwatch.SingleValueWidget(
+            title="Total Builds",
+            width=6,
+            height=6,
+            metrics=[
+                cloudwatch.Metric(
+                    namespace="AWS/CodeBuild",
+                    metric_name="Builds",
+                    statistic='sum',
+                    label='Builds',
+                    period=duration.days(30)
+                )
+            ]
+        )
+
+        average_duration = cloudwatch.GaugeWidget(
+            title="Average Build Time",
+            width=6,
+            height=6,
+            metrics=[
+                cloudwatch.Metric(
+                    namespace="AWS/CodeBuild",
+                    metric_name="Duration",
+                    statistic='Average',
+                    label='Duration',
+                    period=duration.hours(1)
+                )
+            ],
+            left_y_axis={
+                'min': 0,
+                'max': 300,
+            }
+        )
+
+        queued_duration = cloudwatch.GaugeWidget(
+            title="Build Queue Duration",
+            width=6,
+            height=6,
+            metrics=[
+                cloudwatch.Metric(
+                    namespace="AWS/CodeBuild",
+                    metric_name="QueuedDuration",
+                    statistic='Average',
+                    label='Duration',
+                    period=duration.hours(1)
+                )
+            ],
+            left_y_axis={
+                'min': 0,
+                'max': 60,
+            }
+        )
+
+        download_duration = cloudwatch.GraphWidget(
+            title="Checkout Duration",
+            width=24,
+            height=5,
+            left=[
+                cloudwatch.Metric(
+                    namespace="AWS/CodeBuild",
+                    metric_name="DownloadSourceDuration",
+                    statistic='max',
+                    label='Duration',
+                    period=duration.minutes(5),
+                    color=cloudwatch.Color.PURPLE
+                )
+            ]
+            )
+
         dashboard = cloudwatch.Dashboard(
             self, 'CICD_Dashboard',
             dashboard_name='CICD_Dashboard',
             widgets=[
-                [build_rate]
+                [build_rate, builds_count, average_duration, queued_duration, download_duration]
             ]
         )
+
+        email_subscription = subscriptions.EmailSubscription('joshua.lee@naimuri.com')
+
+        failure_topic = sns.Topic(
+            self, "BuildFailure",
+            display_name="BuildFailure"
+        )
+
+        failure_topic.add_subscription(email_subscription)
+
+        # CloudWatch Event Rule for pipeline failures
+        pipeline_failure_rule = events.Rule(self, "PipelineFailureRule",
+          description="Notify on pipeline failures",
+          event_pattern={
+            "source": ["aws.codepipeline"],
+            "detail_type": ["CodePipeline Pipeline Execution State Change"],
+            "detail": {
+                "state": ["FAILED"]
+            }
+          }
+        )
+
+        # Add SNS topic as a target with input transformer
+        pipeline_failure_rule.add_target(targets.SnsTopic(
+          failure_topic,
+          message=events.RuleTargetInput.from_text(
+            f"Pipeline Failure Detected! Pipeline: {events.EventField.from_path('$.detail.pipeline')} "
+            f"Execution ID: {events.EventField.from_path('$.detail.execution-id')}"
+          )
+        ))
 
 
